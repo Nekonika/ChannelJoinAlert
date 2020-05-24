@@ -1,7 +1,7 @@
 registerPlugin({
 
 name: 'Channel Join Alert',
-version: 'v.1.0.0',
+version: 'v.2.0.0',
 description: 'Automatically alerts every admin of a channel when a user connects to that channel.',
 author: 'Nekonika || Nuk3_Craft3r <nuk3craft3r@gmail.com>',
 vars:[
@@ -13,6 +13,12 @@ vars:[
             'Private Message',
             'Poke'
         ]
+    },
+    { /* Specify a cooldown for pings and messages, so supporters can't be spammed */
+        name: 'messageCooldown',
+        title: 'Supply a cooldown for your pings and messages (in seconds):',
+        type: 'number',
+        placeholder: 0
     },
     { /* The Messge each admin receives when a user connects to their moderated channel */
         name: 'adminMessage',
@@ -138,6 +144,8 @@ vars:[
     var engine = require('engine');
     var backend = require('backend');
     var event = require('event');
+
+    var last_pinged = []; //[0] ( [0] = integer client.id | [1] = channel-id | [2] = long last_pinged_at + offset )
     
     if ( config.doLogging ) { engine.log( "[Main] " + "Successfully loaded the script!" ) }
 
@@ -169,7 +177,7 @@ vars:[
                     if ( config.doLogging ) { engine.log( "A nonadmin joined channel " +isModeratedChannelResult[1].channelName+ "!" ) }
                     
                     //private message
-                    sendMessage( ( isModeratedChannelResult[1].useGroup == 0 ? isModeratedChannelResult[1].channelAdminsRole : isModeratedChannelResult[1].channelAdminsName ), ( isModeratedChannelResult[1].useGroup == 0 ? true : false ), ev.client, ev.toChannel.name() )
+                    sendMessage( ( isModeratedChannelResult[1].useGroup == 0 ? isModeratedChannelResult[1].channelAdminsRole : isModeratedChannelResult[1].channelAdminsName ), ( isModeratedChannelResult[1].useGroup == 0 ? true : false ), ev.client, ev.toChannel )
 
                 }
             }
@@ -232,31 +240,39 @@ vars:[
     }
     
     // sendMessage( array channelAdmins, bool useGroup, client client )
-    function sendMessage( channelAdmins, useGroup, client, channelName ) {
-        var foundSupporter = 0
+    function sendMessage( channelAdmins, useGroup, client, channel ) {
+        var channelName = channel.name();
+        var channelId = parseInt(channel.id());
+
+        var foundSupporter = 0;
+        var recentPingedSupporter = 0;
 
         for ( channelAdmin in channelAdmins ) {
 
             if ( useGroup ) {
                 // if we want to use the role
 
-                var clients = backend.getClients()
+                var clients = backend.getClients();
 
                 for ( currentClient in clients ) {
 
                     //skip checking roles if we got the client who needs support
                     if ( client == clients[currentClient] ) { continue; }
 
-                    roles = clients[currentClient].getServerGroups()
+                    roles = clients[currentClient].getServerGroups();
 
                     for ( role in roles ) {
 
                         if ( roles[role].id() == channelAdmins[channelAdmin].roleID ) {
                             
-                            // check if admin is in ignoredPingChannel
+                            // check if admin is in ignoredPingChannel or has recently been pinged
+                            if ( hasRecentlyBeenMessaged( clients[currentClient].id(), channelId )[0] ) { recentPingedSupporter++; continue; }
                             if ( isInIgnoredPingChannel( clients[currentClient] ) ) { continue; }
 
                             foundSupporter++;
+
+                            var next_ping = new Date(); next_ping.setSeconds(next_ping.getSeconds() + config.messageCooldown);
+                            last_pinged.push([ parseInt(clients[currentClient].id()), channelId, next_ping.getTime() ]);
 
                             // message user / poke user
                             if (config.messageType == 0 ) {
@@ -274,10 +290,14 @@ vars:[
                 var thisAdmin = backend.getClientByUID( channelAdmins[channelAdmin].adminID )
                 if ( thisAdmin ) {
                     
-                    // check if admin is in ignoredPingChannel
+                    // check if admin is in ignoredPingChannel or has recently been pinged
+                    if ( hasRecentlyBeenMessaged( thisAdmin.id(), channelId )[0] ) { recentPingedSupporter++; continue; }
                     if ( isInIgnoredPingChannel( thisAdmin ) ) { continue; }
                     
                     foundSupporter++;
+
+                    var next_ping = new Date(); next_ping.setSeconds(next_ping.getSeconds() + config.messageCooldown);
+                    last_pinged.push([ parseInt(thisAdmin.id()), channelId, next_ping.getTime() ]);
 
                     // message user / poke user
                     if (config.messageType == 0 ) {
@@ -296,17 +316,29 @@ vars:[
         
         if ( foundSupporter > 0 ) {
             
-            if ( config.doLogging ) { engine.log( "Successfully found " +foundSupporter+ " Supporter!" ) }
+            if ( config.doLogging ) {
+                if ( recentPingedSupporter > 0 ) {
+                    engine.log( "Successfully found " +(foundSupporter + recentPingedSupporter)+ " Supporter, where " +recentPingedSupporter+ " of them have recently been notified!" );
+                } else {
+                    engine.log( "Successfully found " +foundSupporter+ " Supporter!" );
+                }
+            }
             
-            // Message: "Es wurden" +foundSupporter+ "benachrichtigt das du Hilfe brauchst!"
-            client.chat( ( config.userMessage ).replace("{FoundSupporter}", foundSupporter).replace("{Channel}", channelName ) )
+            // Message: "Es wurden " +foundSupporter+ " Supporter benachrichtigt, dass du Hilfe brauchst!"
+            client.chat( ( config.userMessage ).replace("{FoundSupporter}", foundSupporter + recentPingedSupporter).replace("{Channel}", channelName ) );
+
+        } else if ( recentPingedSupporter > 0 ) {
+
+            if ( config.doLogging ) { engine.log( "All " +recentPingedSupporter+ " Supporter have already been notified less than " +config.messageCooldown+ " seconds ago!" ); }
+
+            client.chat( ( config.userMessage ).replace("{FoundSupporter}", recentPingedSupporter).replace("{Channel}", channelName ) );
 
         } else {
             
-            if ( config.doLogging ) { engine.log( "Could not find any Supporter!" ) }
+            if ( config.doLogging ) { engine.log( "Could not find any Supporter!" ); }
             
             // message client that there is currently no Supporter
-            client.chat( config.userNoSuppMessage )
+            client.chat( config.userNoSuppMessage );
         
         }
     }
@@ -333,6 +365,25 @@ vars:[
         if ( config.doDebug ) { engine.log( "[isInIgnoredPingChannel] " + "User " +client.name()+ " may be pinged.") }
         return false;
 
+    }
+
+    function hasRecentlyBeenMessaged( client_id, channel_id ) {
+        var now = new Date().getTime();
+
+        //remove exceeded objects
+        last_pinged = last_pinged.filter(x => x[2] > now );
+        
+        for ( i = 0; i < last_pinged.length; i++ ) {
+            var last_pinged_client = last_pinged[i];
+
+            if ( last_pinged_client[0] == parseInt(client_id) && last_pinged_client[1] == parseInt(channel_id) ) {
+              if ( config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "Client with id " +client_id+ " won't be pinged, as he already received a notification " +Math.ceil((last_pinged_client[2] - now) / 1000)+ " seconds ago!" ); }
+              return [true, last_pinged_client];
+            }
+        }
+
+        if ( config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "User with id " +client_id+ " may be pinged." ); }
+        return [false, null];
     }
     
 });
