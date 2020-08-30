@@ -1,7 +1,7 @@
 registerPlugin({
 
 name: 'Channel Join Alert',
-version: 'v.2.0.0',
+version: 'v.2.1.0',
 description: 'Automatically alerts every admin of a channel when a user connects to that channel.',
 author: 'Nekonika || Nuk3_Craft3r <nuk3craft3r@gmail.com>',
 vars:[
@@ -146,7 +146,7 @@ vars:[
     var event = require('event');
 
     var last_pinged = []; //[0] ( [0] = integer client.id | [1] = channel-id | [2] = long last_pinged_at + offset )
-    
+
     if ( config.doLogging ) { engine.log( "[Main] " + "Successfully loaded the script!" ) }
 
     event.on('clientMove', function(ev) {
@@ -161,23 +161,41 @@ vars:[
         if ( ev.toChannel ){
             var isModeratedChannelResult = isModeratedChannel( ev.toChannel.id(), config.channelGroups )
 
-            if ( config.doLogging && isModeratedChannelResult[0] ) { engine.log( "Client " +ev.client.name()+ " has joined a moderated channel!" ) }
-            
             if ( isModeratedChannelResult[0] ) {
                 var isChannelAdminResult = isChannelAdmin( ev.client, isModeratedChannelResult[1] )
 
                 if ( isChannelAdminResult[0] ) {
 
                     // just write a log entry
-                    if ( config.doLogging ) { engine.log( "Admin " +isChannelAdminResult[1]+ " joined channel " +isModeratedChannelResult[1].channelName+ "!" ) }
+                    if ( config.doLogging ) { engine.log( "Admin " +isChannelAdminResult[1]+ " joined channel " +isModeratedChannelResult[1].channelName+ "! (" +ev.client.name()+ ")" ) }
 
                 } else {
 
                     // write a log entry, ping all admins and ignore those who are in an ignored channel
-                    if ( config.doLogging ) { engine.log( "A nonadmin joined channel " +isModeratedChannelResult[1].channelName+ "!" ) }
-                    
+                    if ( config.doLogging ) { engine.log( "Nonadmin " +ev.client.name()+ " joined channel " +isModeratedChannelResult[1].channelName+ "!" ) }
+
                     //private message
                     sendMessage( ( isModeratedChannelResult[1].useGroup == 0 ? isModeratedChannelResult[1].channelAdminsRole : isModeratedChannelResult[1].channelAdminsName ), ( isModeratedChannelResult[1].useGroup == 0 ? true : false ), ev.client, ev.toChannel )
+
+                }
+            }
+        }
+
+        if ( config.doLogging && ev.fromChannel ){
+            var wasModeratedChannelResult = isModeratedChannel( ev.fromChannel.id(), config.channelGroups )
+
+            if ( wasModeratedChannelResult[0] ) {
+                var isChannelAdminResult = isChannelAdmin( ev.client, wasModeratedChannelResult[1] )
+
+                if ( isChannelAdminResult[0] ) {
+
+                    // write a log entry that the channeladmin joined the channel
+                    engine.log( "Admin " +isChannelAdminResult[1]+ " left channel " +wasModeratedChannelResult[1].channelName+ "! (" +ev.client.name()+ ")" )
+
+                } else {
+
+                    // write a log entry that a nonadmin left the channel
+                    engine.log( "Nonadmin  " +ev.client.name()+ " left channel " +wasModeratedChannelResult[1].channelName+ "!" )
 
                 }
             }
@@ -187,7 +205,7 @@ vars:[
     // checks if the given channel is in the given channel list
     // returns { bool isModeratedChannel, channel moderatedChannel }
     function isModeratedChannel(channelID, moderatedChannels){
-        
+
         if ( config.doDebug ) { engine.log( "[isModeratedChannel] " + "Checking if channel " +channelID+ " is Moderated." ) }
         for (var moderatedChannel in moderatedChannels){
             if ( moderatedChannels[moderatedChannel].channelID == channelID ){
@@ -238,7 +256,7 @@ vars:[
             return [false, null];
         }
     }
-    
+
     // sendMessage( array channelAdmins, bool useGroup, client client )
     function sendMessage( channelAdmins, useGroup, client, channel ) {
         var channelName = channel.name();
@@ -286,14 +304,14 @@ vars:[
                 }
             } else {
                 // if we want to use the admins ids
-                
+
                 var thisAdmin = backend.getClientByUID( channelAdmins[channelAdmin].adminID )
                 if ( thisAdmin ) {
-                    
+
                     // check if admin is in ignoredPingChannel or has recently been pinged
                     if ( hasRecentlyBeenMessaged( thisAdmin.id(), channelId )[0] ) { recentPingedSupporter++; continue; }
                     if ( isInIgnoredPingChannel( thisAdmin ) ) { continue; }
-                    
+
                     foundSupporter++;
 
                     var next_ping = new Date(); next_ping.setSeconds(next_ping.getSeconds() + config.messageCooldown);
@@ -313,9 +331,9 @@ vars:[
                 }
             }
         }
-        
+
         if ( foundSupporter > 0 ) {
-            
+
             if ( config.doLogging ) {
                 if ( recentPingedSupporter > 0 ) {
                     engine.log( "Successfully found " +(foundSupporter + recentPingedSupporter)+ " Supporter, where " +recentPingedSupporter+ " of them have recently been notified!" );
@@ -323,7 +341,7 @@ vars:[
                     engine.log( "Successfully found " +foundSupporter+ " Supporter!" );
                 }
             }
-            
+
             // Message: "Es wurden " +foundSupporter+ " Supporter benachrichtigt, dass du Hilfe brauchst!"
             client.chat( ( config.userMessage ).replace("{FoundSupporter}", foundSupporter + recentPingedSupporter).replace("{Channel}", channelName ) );
 
@@ -334,12 +352,12 @@ vars:[
             client.chat( ( config.userMessage ).replace("{FoundSupporter}", recentPingedSupporter).replace("{Channel}", channelName ) );
 
         } else {
-            
+
             if ( config.doLogging ) { engine.log( "Could not find any Supporter!" ); }
-            
+
             // message client that there is currently no Supporter
             client.chat( config.userNoSuppMessage );
-        
+
         }
     }
 
@@ -355,7 +373,7 @@ vars:[
 
         for ( ignoredChannel in config.ignoredPingChannel ) {
             if ( config.ignoredPingChannel[ignoredChannel].ignoreChannel == audChannel ) {
-                
+
                 if ( config.doDebug ) { engine.log( "[isInIgnoredPingChannel] " + "Do not ping " +client.name()+ " because client is in an ignored channel.") }
                 return true;
 
@@ -377,13 +395,12 @@ vars:[
             var last_pinged_client = last_pinged[i];
 
             if ( last_pinged_client[0] == parseInt(client_id) && last_pinged_client[1] == parseInt(channel_id) ) {
-              if ( config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "Client with id " +client_id+ " won't be pinged, as he already received a notification " +Math.ceil((last_pinged_client[2] - now) / 1000)+ " seconds ago!" ); }
-              return [true, last_pinged_client];
+                if ( config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "Client with id " +client_id+ " won't be pinged, as he already received a notification " +Math.ceil((last_pinged_client[2] - now) / 1000)+ " seconds ago!" ); }
+                return [true, last_pinged_client];
             }
         }
 
         if ( config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "User with id " +client_id+ " may be pinged." ); }
         return [false, null];
     }
-    
 });
