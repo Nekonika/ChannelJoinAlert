@@ -5,6 +5,22 @@ version: 'v.2.1.0',
 description: 'Automatically alerts every admin of a channel when a user connects to that channel.',
 author: 'Nekonika || Nuk3_Craft3r <nuk3craft3r@gmail.com>',
 vars:[
+    { /* Enables or Diables logging */
+        name: 'doLogging',
+        title: 'Enable Logging',
+        type: 'checkbox',
+        default: false
+    },
+    { /* Enables or Diables debugging */
+        name: 'doDebug',
+        title: 'Enable Debugging',
+        type: 'checkbox',
+        default: false,
+        conditions: [{
+            field: "doLogging",
+            value: true
+        }]
+    },
     { /* Allowes the user to choose between poke and pm for the notifications */
         name: 'messageType',
         title: 'Should the Bot send a privat chat message or poke the users?',
@@ -13,6 +29,12 @@ vars:[
             'Private Message',
             'Poke'
         ]
+    },
+    { /* Allowes the user to choose if the bot should ping users which are set to afk */
+        name: 'ignoreAfkUsers',
+        title: 'Should the Bot ignore AFK users?',
+        type: 'checkbox',
+        default: false
     },
     { /* Specify a cooldown for pings and messages, so supporters can't be spammed */
         name: 'messageCooldown',
@@ -127,16 +149,6 @@ vars:[
             title: "Select a channel to ignore:",
             type: "channel"
         }]
-    },
-    { /* Enables or Diables logging */
-        name: 'doLogging',
-        title: 'Enable Logging',
-        type: 'checkbox',
-    },
-    { /* Enables or Diables debugging */
-        name: 'doDebug',
-        title: 'Enable Debugging',
-        type: 'checkbox',
     }
 ]
 
@@ -151,10 +163,10 @@ vars:[
 
     event.on('clientMove', function(ev) {
 
-        if ( config.doDebug ) { engine.log( "[Main] " + "Event 'clientMove' has been triggered!" ) }
+        if ( config.doLogging && config.doDebug ) { engine.log( "[Main] " + "Event 'clientMove' has been triggered!" ) }
 
         if ( ev.client.isSelf() ) {
-            if ( config.doDebug ) { engine.log( "I have been moved!" ) }
+            if ( config.doLogging && config.doDebug ) { engine.log( "I have been moved!" ) }
             return;
         }
 
@@ -206,23 +218,23 @@ vars:[
     // returns { bool isModeratedChannel, channel moderatedChannel }
     function isModeratedChannel(channelID, moderatedChannels){
 
-        if ( config.doDebug ) { engine.log( "[isModeratedChannel] " + "Checking if channel " +channelID+ " is Moderated." ) }
+        if ( config.doLogging && config.doDebug ) { engine.log( "[isModeratedChannel] " + "Checking if channel " +channelID+ " is Moderated." ) }
         for (var moderatedChannel in moderatedChannels){
             if ( moderatedChannels[moderatedChannel].channelID == channelID ){
-                if ( config.doDebug ) { engine.log( "[isModeratedChannel] " + "Channel " +channelID+ " is Moderated." ) }
+                if ( config.doLogging && config.doDebug ) { engine.log( "[isModeratedChannel] " + "Channel " +channelID+ " is Moderated." ) }
                 return [true, moderatedChannels[moderatedChannel]];
             }
         }
-        if ( config.doDebug ) { engine.log( "[isModeratedChannel] " + "Channel " +channelID+ " is not Moderated." ) }
+        if ( config.doLogging && config.doDebug ) { engine.log( "[isModeratedChannel] " + "Channel " +channelID+ " is not Moderated." ) }
         return [false, null];
     }
 
     // checks if the user is an admin of that channel
     // returns { bool isAdmin, string adminName }
     function isChannelAdmin(client, channel){
-        if ( config.doDebug ) { engine.log( "[isChannelAdmin] " + "Checking if clientID " +client.uid()+ " is an Admin for channel " +channel.channelName+ "." ) }
+        if ( config.doLogging && config.doDebug ) { engine.log( "[isChannelAdmin] " + "Checking if clientID " +client.uid()+ " is an Admin for channel " +channel.channelName+ "." ) }
         
-        if ( config.doDebug ) { engine.log( "[isChannelAdmin] " + "Variable useGroup for " +channel.channelName+ " is set to using " +( channel.useGroup == 0 ? "Roles" : "UserIDs" )+ "." ) }
+        if ( config.doLogging && config.doDebug ) { engine.log( "[isChannelAdmin] " + "Variable useGroup for " +channel.channelName+ " is set to using " +( channel.useGroup == 0 ? "Roles" : "UserIDs" )+ "." ) }
 
         // continue here if we selected to specify admins by role
         if ( channel.useGroup == 0 ) {
@@ -232,13 +244,13 @@ vars:[
                 for (var adminRole in channel.channelAdminsRole ) {
                     var myRole = channel.channelAdminsRole[adminRole]
                     if (serverGroups[serverGroup].id() == myRole.roleID ){
-                        if ( config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " has an Admin-Role." ) }
+                        if ( config.doLogging && config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " has an Admin-Role." ) }
                         return [true, myRole.roleName];
                     }
                 }
             }
 
-            if ( config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " is not in an Admin-Role." ) }
+            if ( config.doLogging && config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " is not in an Admin-Role." ) }
             return [false, null];
 
         // continue here if we selected to specify admins by userID
@@ -247,12 +259,12 @@ vars:[
             for (var channelAdmin in channel.channelAdminsName){
                 var admin = channel.channelAdminsName[channelAdmin]
                 if (admin.adminID == client.uid()){
-                    if ( config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " is an Admin." ) }
+                    if ( config.doLogging && config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " is an Admin." ) }
                     return [true, admin.adminName];
                 }
             }
 
-            if ( config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " is not an Admin." ) }
+            if ( config.doLogging && config.doDebug ) { engine.log( "[isChannelAdmin] " + "User " +client.name()+ " is not an Admin." ) }
             return [false, null];
         }
     }
@@ -271,6 +283,9 @@ vars:[
                 // if we want to use the role
 
                 var clients = backend.getClients();
+
+                // filter AFK users, as those should not be pinged anyways
+                if ( config.ignoreAfkUsers ) { clients = clients.filter(client => !client.isAway()); }
 
                 for ( currentClient in clients ) {
 
@@ -311,6 +326,7 @@ vars:[
                     // check if admin is in ignoredPingChannel or has recently been pinged
                     if ( hasRecentlyBeenMessaged( thisAdmin.id(), channelId )[0] ) { recentPingedSupporter++; continue; }
                     if ( isInIgnoredPingChannel( thisAdmin ) ) { continue; }
+                    if ( config.ignoreAfkUsers && thisAdmin.isAway() ) { continue; }
 
                     foundSupporter++;
 
@@ -374,13 +390,13 @@ vars:[
         for ( ignoredChannel in config.ignoredPingChannel ) {
             if ( config.ignoredPingChannel[ignoredChannel].ignoreChannel == audChannel ) {
 
-                if ( config.doDebug ) { engine.log( "[isInIgnoredPingChannel] " + "Do not ping " +client.name()+ " because client is in an ignored channel.") }
+                if ( config.doLogging && config.doDebug ) { engine.log( "[isInIgnoredPingChannel] " + "Do not ping " +client.name()+ " because client is in an ignored channel.") }
                 return true;
 
             }
         }
 
-        if ( config.doDebug ) { engine.log( "[isInIgnoredPingChannel] " + "User " +client.name()+ " may be pinged.") }
+        if ( config.doLogging && config.doDebug ) { engine.log( "[isInIgnoredPingChannel] " + "User " +client.name()+ " may be pinged.") }
         return false;
 
     }
@@ -395,12 +411,12 @@ vars:[
             var last_pinged_client = last_pinged[i];
 
             if ( last_pinged_client[0] == parseInt(client_id) && last_pinged_client[1] == parseInt(channel_id) ) {
-                if ( config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "Client with id " +client_id+ " won't be pinged, as he already received a notification " +Math.ceil((last_pinged_client[2] - now) / 1000)+ " seconds ago!" ); }
+                if ( config.doLogging && config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "Client with id " +client_id+ " won't be pinged, as he already received a notification " +Math.ceil((last_pinged_client[2] - now) / 1000)+ " seconds ago!" ); }
                 return [true, last_pinged_client];
             }
         }
 
-        if ( config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "User with id " +client_id+ " may be pinged." ); }
+        if ( config.doLogging && config.doDebug ) { engine.log( "[hasRecentlyBeenMessaged] " + "User with id " +client_id+ " may be pinged." ); }
         return [false, null];
     }
 });
